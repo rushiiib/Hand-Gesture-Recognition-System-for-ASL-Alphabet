@@ -11,7 +11,7 @@ detector = HandDetector(maxHands=1)
 offset = 20
 imgSize = 300
 
-folder = "Images/A"
+folder = "Images/T"
 counter = 0
 
 imgWhite = None
@@ -36,7 +36,16 @@ while True:
 
         imgWhite = np.ones((imgSize, imgSize,3),np.uint8)*255
     
-        imgCrop = img[y - offset:y + h + offset , x - offset:x + w + offset]
+        
+        y1 = max(0, y - offset)
+        y2 = min(img.shape[0], y + h + offset)  
+        x1 = max(0, x - offset)
+        x2 = min(img.shape[1], x + w + offset)  
+
+        imgCrop = img[y1:y2, x1:x2]
+
+        if imgCrop.size == 0:
+            continue  
 
         if imgCrop.size != 0 or imgCrop.shape[0] > 0 or imgCrop.shape[1] > 0:
             imgCropShape = imgCrop.shape 

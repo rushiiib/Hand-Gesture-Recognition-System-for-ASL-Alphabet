@@ -1,65 +1,56 @@
-# train.py
+# train.py (updated for split dataset)
 import os
 import numpy as np
 import cv2
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.utils import to_categorical
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 # ------------------------------
 # PARAMETERS
 # ------------------------------
-IMG_SIZE = 64  # resize images to 64x64
-DATA_DIR = r"C:\Users\riyaa\OneDrive\Desktop\CMPT310 Project\Split"  # absolute path to U-Z folders
+IMG_SIZE = 64
+BASE_DIR = r"C:\Users\riyaa\OneDrive\Desktop\CMPT310 Project\Split"  # must contain train/val/test folders
 EPOCHS = 15
 BATCH_SIZE = 16
 
 # ------------------------------
-# CHECK DATA DIR
+# HELPER FUNCTION TO LOAD DATA
 # ------------------------------
-if not os.path.exists(DATA_DIR):
-    raise FileNotFoundError(f"Data directory {DATA_DIR} not found!")
-
-# ------------------------------
-# LOAD DATA
-# ------------------------------
-X = []
-y = []
-labels = sorted(os.listdir(DATA_DIR))  # ['U','V','W','X','Y','Z']
-
-print("Loading images...")
-for idx, label in enumerate(labels):
-    folder_path = os.path.join(DATA_DIR, label)
-    if not os.path.exists(folder_path):
-        print(f"Warning: Folder {folder_path} not found, skipping...")
-        continue
-    if len(os.listdir(folder_path)) == 0:
-        print(f"Warning: No images found in {folder_path}")
-        continue
-    for img_name in os.listdir(folder_path):
-        img_path = os.path.join(folder_path, img_name)
-        img = cv2.imread(img_path)
-        if img is None:
+def load_data(split):
+    X = []
+    y = []
+    split_dir = os.path.join(BASE_DIR, split)
+    labels = sorted(os.listdir(split_dir))
+    
+    for idx, label in enumerate(labels):
+        folder_path = os.path.join(split_dir, label)
+        if not os.path.exists(folder_path):
             continue
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-        X.append(img)
-        y.append(idx)
-
-X = np.array(X, dtype='float32') / 255.0  # normalize to [0,1]
-y = to_categorical(y, num_classes=len(labels))
-
-print(f"Total images: {len(X)}, Total classes: {len(labels)}")
+        for img_name in os.listdir(folder_path):
+            img_path = os.path.join(folder_path, img_name)
+            img = cv2.imread(img_path)
+            if img is None:
+                continue
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+            X.append(img)
+            y.append(idx)
+    X = np.array(X, dtype='float32') / 255.0
+    y = to_categorical(y, num_classes=len(labels))
+    return X, y, labels
 
 # ------------------------------
-# SPLIT DATA
+# LOAD TRAINING AND VALIDATION DATA
 # ------------------------------
-y_labels = np.argmax(y, axis=1)  # for stratified split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y_labels
-)
+print("Loading training data...")
+X_train, y_train, labels = load_data('train')
+
+print("Loading validation data...")
+X_val, y_val, _ = load_data('val')
+
+print(f"Total training images: {len(X_train)}, Total validation images: {len(X_val)}, Total classes: {len(labels)}")
 
 # ------------------------------
 # BUILD CNN MODEL
@@ -88,7 +79,7 @@ model.summary()
 # ------------------------------
 history = model.fit(
     X_train, y_train,
-    validation_data=(X_test, y_test),
+    validation_data=(X_val, y_val),
     epochs=EPOCHS,
     batch_size=BATCH_SIZE
 )

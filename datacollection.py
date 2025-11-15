@@ -5,15 +5,27 @@ import math
 import time
 import os
 
-# Open the first webcam (usually 0)
+# Try different camera indices
+# 0 = default camera, 1 = external/continuity camera
 cap = cv2.VideoCapture(0)
+
+# Set camera properties explicitly
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FPS, 30)
+
+# Add a small delay to let camera initialize
+time.sleep(1)
+
 detector = HandDetector(maxHands=1)
 
 offset = 20
 imgSize = 300
 
-folder = "Images/A"
+folder = "Images/N"
 counter = 0
+
+# Create folder if it doesn't exist
 os.makedirs(folder, exist_ok=True)
 
 imgWhite = None
@@ -21,16 +33,22 @@ imgWhite = None
 # Check if the webcam opened correctly
 if not cap.isOpened():
     print("Error: Could not open webcam.")
-    exit()
+    print("Trying camera index 1...")
+    cap = cv2.VideoCapture(1)
+    if not cap.isOpened():
+        print("Error: Could not open any camera.")
+        exit()
 
-print("Press 'S' to save | Press 'Q' to quit")
+print("Camera opened successfully! Press 's' to save images, 'q' to quit.")
 
 while True:
     # Read frame
     success, img = cap.read()
-    if not success:
-        print("Failed to grab frame")
-        break
+    
+    if not success or img is None:
+        print("Failed to grab frame, retrying...")
+        time.sleep(0.1)
+        continue
 
     hands, img = detector.findHands(img)
 
@@ -38,43 +56,43 @@ while True:
         hand = hands[0]
         x, y, w, h = hand['bbox']
 
-        # Get image dimensions
-        img_h, img_w, _ = img.shape
+        imgWhite = np.ones((imgSize, imgSize, 3), np.uint8) * 255
         
         # Calculate crop boundaries with safety checks
         y1 = max(0, y - offset)
-        y2 = min(img_h, y + h + offset)
+        y2 = min(img.shape[0], y + h + offset)  
         x1 = max(0, x - offset)
-        x2 = min(img_w, x + w + offset)
-        
+        x2 = min(img.shape[1], x + w + offset)  
+
         imgCrop = img[y1:y2, x1:x2]
 
-        # Only process if crop is valid
-        if imgCrop.size > 0 and imgCrop.shape[0] > 10 and imgCrop.shape[1] > 10:
-            imgWhite = np.ones((imgSize, imgSize, 3), np.uint8) * 255
-            
-            h_crop, w_crop, _ = imgCrop.shape
-            aspectRatio = h_crop / w_crop
+        # Check if crop is valid
+        if imgCrop.size == 0 or imgCrop.shape[0] == 0 or imgCrop.shape[1] == 0:
+            continue  
 
+        aspectRatio = h / w
+
+        try:
             if aspectRatio > 1:
-                # Height is bigger
-                k = imgSize / h_crop
-                wCal = int(k * w_crop)
-                if wCal > 0 and wCal <= imgSize:
+                k = imgSize / h
+                wCal = math.ceil(k * w)
+                if wCal > 0:
                     imgResize = cv2.resize(imgCrop, (wCal, imgSize))
-                    wGap = (imgSize - wCal) // 2
-                    imgWhite[:, wGap:wGap + wCal] = imgResize
+                    wGap = math.ceil((imgSize - wCal) / 2)
+                    imgWhite[:, wGap:wCal + wGap] = imgResize
             else: 
-                # Width is bigger
-                k = imgSize / w_crop
-                hCal = int(k * h_crop)
-                if hCal > 0 and hCal <= imgSize:
+                k = imgSize / w
+                hCal = math.ceil(k * h)
+                if hCal > 0:
                     imgResize = cv2.resize(imgCrop, (imgSize, hCal))
-                    hGap = (imgSize - hCal) // 2
-                    imgWhite[hGap:hGap + hCal, :] = imgResize
+                    hGap = math.ceil((imgSize - hCal) / 2)
+                    imgWhite[hGap:hCal + hGap, :] = imgResize
 
             cv2.imshow("ImageCrop", imgCrop)
             cv2.imshow("ImageWhite", imgWhite)
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            continue
 
     # Show the frame
     cv2.imshow("Webcam Feed", img)
@@ -85,16 +103,16 @@ while True:
     if key == ord('q'):
         break
 
-    # Save on 's' key
     if key == ord("s"):
         if imgWhite is not None:
             counter += 1
-            cv2.imwrite(f'{folder}/Image_{counter}_{int(time.time())}.jpg', imgWhite)
-            print(f"Saved image {counter}")
+            filename = f'{folder}/Image_{counter}_{time.time()}.jpg'
+            cv2.imwrite(filename, imgWhite)
+            print(f"Saved image {counter} to {filename}")
         else:
-            print("No hand detected")
+            print("No hand detected - cannot save image")
 
 # Release the webcam and close windows
 cap.release()
 cv2.destroyAllWindows()
-print(f"\nTotal saved: {counter} images")
+print(f"Total images saved: {counter}")
